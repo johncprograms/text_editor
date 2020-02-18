@@ -2,6 +2,10 @@
 My personal text editor. It's a modal editor I wrote to avoid wrist problems, so it's not very user-friendly.
 But it works for me, and hey, you might find some interesting code in there.
 
+# credits
+* Sean Barret for https://github.com/nothings/stb/blob/master/stb_truetype.h, which is included in the repo, or at least on old version of it.
+* Myself, of course!
+
 # logistics
 It's Windows-only, AVX2-only. That's because all the machines I'm using meet that spec. 
 It mainly uses AVX2 to have reasonably fast software rendering ( ~10 milliseconds end-to-end frame time, on a 4k display ).
@@ -25,7 +29,7 @@ On crash, a full heap dump will get written to that logging directory alongside 
 
 There's also an instrumentation profiler, which dumps it's statistics to that log on program exit. See ```PROF_ENABLED``` for the switch to turn this on/off.
 
-# programming curiosities:
+# programming curiosities
 * ```CsFromFloat32``` and ```CsToFloat32``` are some half-done, infinite-precision implementations of ftoa/atof. Interesting for the sake of learning why those operations are so crazy slow.
 * ```queue_mrmw_t``` and similar srmw, mrsw, srsw versions implement lock-free ringbuffers for multithreading. "mrsw" meaning "multiple-readers, single-writer", and similar for the other versions. In my opinion, using this kind of lock-free message-passing and SetEvent to wakeup threads is _the_ way to do multithreading.
 * ```FontLoadGlyphImage``` does something similar to ClearType, with sharpening filters to try to make text glyphs look better.
