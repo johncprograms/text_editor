@@ -10775,7 +10775,7 @@ MainKill()
 #endif
 
 
-#include "glw_font_stb_truetype.h"
+#include "stb_truetype.h"
 
 
 
