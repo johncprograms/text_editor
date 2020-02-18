@@ -4,7 +4,7 @@ But it works for me, and hey, you might find some interesting code in there.
 
 # credits
 * Sean Barrett for https://github.com/nothings/stb/blob/master/stb_truetype.h, which is included in the repo, or at least on old version of it.
-* Myself, of course!
+* Myself, of course! :D
 
 # logistics
 It's Windows-only, AVX2-only. That's because all the machines I'm using meet that spec. 
