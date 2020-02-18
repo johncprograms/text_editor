@@ -3,7 +3,7 @@ My personal text editor. It's a modal editor I wrote to avoid wrist problems, so
 But it works for me, and hey, you might find some interesting code in there.
 
 # credits
-* Sean Barret for https://github.com/nothings/stb/blob/master/stb_truetype.h, which is included in the repo, or at least on old version of it.
+* Sean Barrett for https://github.com/nothings/stb/blob/master/stb_truetype.h, which is included in the repo, or at least on old version of it.
 * Myself, of course!
 
 # logistics
