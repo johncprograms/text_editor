@@ -2,12 +2,13 @@
 My personal text editor. It's a modal editor I wrote to avoid wrist problems, so it's not very user-friendly.
 But it works for me, and hey, you might find some interesting code in there.
 
+# logistics
 It's Windows-only, AVX2-only. That's because all the machines I'm using meet that spec. 
 It mainly uses AVX2 to have reasonably fast software rendering ( ~10 milliseconds end-to-end frame time, on a 4k display ).
 
 It used to use OpenGL, but OpenGL on Windows requires at least half a second of boot delay; particularly in SetPixelFormat to set up the driver's GL context. Terrible.
 Perhaps D2D/D3D would fare better, but I doubt it.
-So we use our own software rendering ( ~7 cycles per pixel for text transparency blending ), fed into good ol' GDI. It turns out that's fast enough for realtime animation of such simple data, so I'm sticking with that for now. The OGL crap is still in there; I'll let it sit since that transition was recent.
+So we use our own software rendering ( ~7 cycles per pixel for texture transparency blending ), fed into good ol' GDI. It turns out that's fast enough for realtime animation of such simple data, so I'm sticking with that for now. The OGL crap is still in there; I'll let it sit since that transition was recent.
 
 The build/ folder has the batch files to build debug/ship versions of the program.
 It requires a VS2019 Community Edition install to build:
@@ -24,7 +25,7 @@ On crash, a full heap dump will get written to that logging directory alongside 
 
 There's also an instrumentation profiler, which dumps it's statistics to that log on program exit. See ```PROF_ENABLED``` for the switch to turn this on/off.
 
-Programming curiosities:
+# programming curiosities:
 * ```CsFromFloat32``` and ```CsToFloat32``` are some half-done, infinite-precision implementations of ftoa/atof. Interesting for the sake of learning why those operations are so crazy slow.
 * ```queue_mrmw_t``` and similar srmw, mrsw, srsw versions implement lock-free ringbuffers for multithreading. "mrsw" meaning "multiple-readers, single-writer", and similar for the other versions. In my opinion, using this kind of lock-free message-passing and SetEvent to wakeup threads is _the_ way to do multithreading.
 * ```FontLoadGlyphImage``` does something similar to ClearType, with sharpening filters to try to make text glyphs look better.
