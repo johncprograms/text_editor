@@ -10,7 +10,7 @@ But it works for me, and hey, you might find some interesting code in there.
 It's Windows-only, AVX2-only. That's because all the machines I'm using meet that spec. 
 It mainly uses AVX2 to have reasonably fast software rendering ( ~10 milliseconds end-to-end frame time, on a 4k display; ~3 milliseconds of which is spent by Windows ).
 
-It used to use OpenGL, but OpenGL on Windows requires at least half a second of boot delay; particularly in SetPixelFormat to set up the driver's GL context. Terrible.
+It used to use OpenGL, but OpenGL on Windows requires at least half a second of boot delay; particularly in ChoosePixelFormat/SetPixelFormat to set up the driver's GL context. Terrible.
 Perhaps D2D/D3D would fare better, but I doubt it.
 So we use our own software rendering ( ~7 cycles per pixel for texture transparency blending ), fed into good ol' GDI. It turns out that's fast enough for realtime animation of such simple data, so I'm sticking with that for now. The OGL crap is still in there; I'll let it sit since that transition was recent.
 
