@@ -43,6 +43,7 @@ There's also an instrumentation profiler, which dumps it's statistics to that lo
 # programming curiosities
 * I use ```#define Inl   __forceinline static``` very generously. That's because lots of functions are there just for convenience / code deduplication, and don't map well to performant assembly. Linkers are terrible at inlining; I'd much rather have the problem of deciding which functions not to inline.
 * ```CsFromFloat32``` and ```CsToFloat32``` are some half-done, infinite-precision implementations of ftoa/atof. Interesting for the sake of learning why those operations are so crazy slow.
+* ```TimeInit``` pulls a bunch of interesting CPU info from the ```cpuid``` instructions, including clock rate.
 * ```queue_mrmw_t``` and similar srmw, mrsw, srsw versions implement lock-free ringbuffers for multithreading. "mrsw" meaning "multiple-readers, single-writer", and similar for the other versions. In my opinion, using this kind of lock-free message-passing and SetEvent to wakeup threads is _the_ way to do multithreading.
 * ```FontLoadGlyphImage``` does something similar to ClearType, with sharpening filters to try to make text glyphs look better.
 * ```buf_t``` implements a list of variably-sized spans, which each point into a page in a shared linked-list of variably-sized backing pages. This is the workhorse of fast text editing operations. It gets constant-time insertion/deletion/replacement ( no amortization ), excluding the O( count of string you're inserting/replacing to ) cost, which every system pretty much has to pay for.
