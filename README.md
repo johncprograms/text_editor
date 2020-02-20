@@ -14,7 +14,7 @@ It used to use OpenGL, but OpenGL on Windows requires at least half a second of 
 Perhaps D2D/D3D would fare better, but I doubt it.
 So we use our own software rendering ( ~7 cycles per pixel for texture transparency blending ), fed into good ol' GDI. It turns out that's fast enough for realtime animation of such simple data, so I'm sticking with that for now. The OGL crap is still in there; I'll let it sit since that transition was recent.
 
-The code's all bundled here into a single sourcefile, for simplicity. I wrote it using some of my code in headers I use in other programs, but for a single program for people to read, that doesn't really help. So I've inlined all of the headers into the sourcefile ( excluding stb_truetype.h, since it's its own thing ).
+The code's all bundled here into a single sourcefile, for simplicity. I wrote it using code in headers I use in other programs, but for a single program for people to read, that doesn't really help. So I've inlined all of the headers into the sourcefile ( excluding stb_truetype.h, since it's its own thing ).
 
 The build/ folder has the batch files to build debug/ship versions of the program.
 It requires a VS2019 Community Edition install to build:
@@ -22,7 +22,7 @@ It requires a VS2019 Community Edition install to build:
 * set_vs2019_env.bat
 * build_ship.bat ( or build_debug.bat )
 
-The build is a "unity build", where we only have one sourcefile. This saves a bunch of time by eliminating duplicate declarations in headers. You still need a few out-of-order declarations, but it's actually pretty rare.
+The build is a "unity build", where we only have one sourcefile. This saves a bunch of time ( both programming time, and build time ) by eliminating duplicate declarations in headers. You still need a few out-of-order declarations, but it's actually pretty rare.
 
 Considering the non-comment, non-blank lines of code, the breakdown is something like:
 * 23K text_editor.cpp
