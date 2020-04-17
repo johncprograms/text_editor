@@ -1,7 +1,11 @@
+
+
 void
 LogUI( void* cstr ... );
 
 #define FINDLEAKS   0
+
+
 
 //
 // comment text that i'll use for searchability later:
@@ -10,6 +14,8 @@ LogUI( void* cstr ... );
 // we should resolve all the TODOs before considering any kind of general release.
 // i'm okay with PERFs sticking around; we probably shouldn't resolve them until they become a measurable problem.
 //
+
+
 
 
 
@@ -1337,6 +1343,9 @@ MemVirtualReallocBytes( void* mem, idx_t oldlen, idx_t newlen )
 
 
 
+
+
+
 Templ
 struct vec2
 {
@@ -1992,6 +2001,8 @@ PtInTriangle(
   bool r = ( f0 >= 0 )  &&  ( f1 >= 0 )  &&  ( f2 >= 0 );
   return r;
 }
+
+
 
 
 
@@ -3535,6 +3546,9 @@ Row( mat3x3c<T>& src, u32 idx, vec3<T>* dst )
 }
 
 
+
+
+
 Enumc( alloctype_t )
 {
   no_alloc,
@@ -3671,6 +3685,8 @@ Equal( string_t& a, string_t& b )
 }
 
 
+
+
 // arbitrary-length contiguous string of memory.
 // short-lived view on other memory.
 struct
@@ -3694,6 +3710,8 @@ EqualContents( slice_t& a, slice_t& b )
 {
   return MemEqual( ML( a ), ML( b ) );
 }
+
+
 
 
 struct
@@ -3897,6 +3915,9 @@ AddBackBytes( plist_t& list, idx_t align, idx_t len )
 
 
 
+
+
+
 // meant to hold elements which are uniform in size.
 Templ struct
 array_t
@@ -4085,6 +4106,8 @@ ArrayContains( T* mem, idx_t len, T* val )
 
 
 
+
+
 #define TMPL   template<typename T, idx_t N>
 
 
@@ -4192,6 +4215,8 @@ RemAt( embeddedarray_t<T, N>& array, idx_t idx, idx_t nelems = 1 )
 
 
 
+
+
 Templ struct
 fixedarray_t
 {
@@ -4296,6 +4321,8 @@ RemAt( fixedarray_t<T>& array, idx_t idx, idx_t nelems = 1 )
   }
   array.len -= nelems;
 }
+
+
 
 
 
@@ -4504,6 +4531,10 @@ LookupElemByLinearIndex( pagearray_t<T>& list, idx_t idx )
   UnreachableCrash();
   return 0;
 }
+
+
+
+
 
 
 Templ struct
@@ -4868,6 +4899,9 @@ Reclaim( listwalloc_t<T>& list, listelem_t<T>* elem )
 
 
 
+
+
+
 // meant to hold elements which are uniform in size, but the element size isn't known at compile-time.
 struct
 bytearray_t
@@ -4996,6 +5030,9 @@ RemAt( bytearray_t& bytearray, idx_t idx, idx_t nelems = 1 )
   }
   bytearray.len -= nelems;
 }
+
+
+
 
 
 
@@ -5416,6 +5453,10 @@ HASHSET_ELEM_HASH( Hash_SliceContents )
   idx_t r = StringHash( a->mem, a->len );
   return r;
 }
+
+
+
+
 
 
 
@@ -7243,6 +7284,10 @@ CursorCharR( u8* src, idx_t src_len, idx_t pos )
 
 
 
+
+
+
+
 static constexpr idx_t c_fspath_len = 384;
 
 // Holds metadata for a file OR a directory in a filesystem.
@@ -7745,22 +7790,13 @@ _PopulateMetadata( file_t& file )
 void
 _SetFilePtr( file_t& file, u64 file_offset )
 {
-  s32 res = SetFilePointer( _GetHandle( file ), 0, 0, FILE_BEGIN );
-  AssertWarn( res != INVALID_SET_FILE_POINTER );
-  auto nchunks = Cast( u64, file_offset / MAX_s64 );
-  auto nrem    = Cast( u64, file_offset % MAX_s64 );
-  Fori( u64, i, 0, nchunks ) {
-    auto file_offset_lo = Cast( LONG, MAX_u32 );
-    auto file_offset_hi = Cast( LONG, MAX_s32 );
-    res = SetFilePointer( _GetHandle( file ), file_offset_lo, &file_offset_hi, FILE_CURRENT );
-    AssertWarn( res != INVALID_SET_FILE_POINTER );
-  }
-  if( nrem ) {
-    auto file_offset_lo = Cast( LONG, nrem & MAX_u32 );
-    auto file_offset_hi = Cast( LONG, nrem >> 32ULL );
-    res = SetFilePointer( _GetHandle( file ), file_offset_lo, file_offset_hi ? &file_offset_hi : 0, FILE_CURRENT );
-    AssertWarn( res != INVALID_SET_FILE_POINTER );
-  }
+  BOOL res = SetFilePointerEx(
+    _GetHandle( file ),
+    *Cast( LARGE_INTEGER*, &file_offset ),
+    0,
+    FILE_BEGIN
+    );
+  AssertWarn( res );
 }
 
 
@@ -8086,13 +8122,13 @@ struct
 filemapped_t
 {
   u8* mapped_mem;
-  idx_t len;
+  idx_t size;
   void* m; // file mapping handle.
-  void* f; // file handle.
+  void* loaded; // file handle.
 };
 
 filemapped_t
-FileAllocReadOnlyExclusive( u8* filename, idx_t filename_len )
+FileOpenMappedExistingReadShareRead( u8* filename, idx_t filename_len )
 {
   fsobj_t file = _StandardFilename( filename, filename_len );
 
@@ -8115,8 +8151,8 @@ FileAllocReadOnlyExclusive( u8* filename, idx_t filename_len )
   BOOL sized = GetFileSizeEx( f, Cast( LARGE_INTEGER*, &file_size ) );
   AssertWarn( sized );
   if( !file_size ) {
-    // we can't memory-map an empty file.
-    ret.f = Cast( void*, f );
+    // we can't memory-map an empty file. return a valid result, but with zero size.
+    ret.loaded = Cast( void*, f );
 
   } else {
     HANDLE m = CreateFileMapping(
@@ -8144,9 +8180,9 @@ FileAllocReadOnlyExclusive( u8* filename, idx_t filename_len )
     ret.mapped_mem = Cast( u8*, p );
 
     AssertCrash( file_size < MAX_idx );
-    ret.len = Cast( idx_t, file_size );
+    ret.size = Cast( idx_t, file_size );
     ret.m = Cast( void*, m );
-    ret.f = Cast( void*, f );
+    ret.loaded = Cast( void*, f );
   }
 
   return ret;
@@ -8155,10 +8191,10 @@ FileAllocReadOnlyExclusive( u8* filename, idx_t filename_len )
 void
 FileFree( filemapped_t& file )
 {
-  if( file.len ) {
+  if( file.size ) {
     AssertWarn( UnmapViewOfFile( file.mapped_mem ) );
     CloseHandle( Cast( HANDLE, file.m ) );
-    CloseHandle( Cast( HANDLE, file.f ) );
+    CloseHandle( Cast( HANDLE, file.loaded ) );
   }
 
   file = {};
@@ -8548,6 +8584,9 @@ FsFindDirsAndFiles(
 
 
 
+
+
+
 static f32 g_sec_per_tsc32;
 static f64 g_sec_per_tsc64;
 
@@ -8871,6 +8910,9 @@ TimeSecFromClocks64( u64 delta )
 {
   return Cast( f64, delta ) * g_sec_per_qpc64;
 }
+
+
+
 
 
 
@@ -9613,7 +9655,10 @@ MainThreadKill()
 
 
 
+
 #define LOGGER_ENABLED   1
+
+
 
 #ifndef LOGGER_ENABLED
 #error make a choice for LOGGER_ENABLED; either 0 or 1.
@@ -9835,8 +9880,10 @@ LogInline( void* cstr ... )
 
 
 
+
 #define PROF_ENABLED   0
 #define PROF_ENABLED_AT_LAUNCH   0
+
 
 
 #ifndef PROF_ENABLED
@@ -10272,6 +10319,9 @@ ProfOutputCmdline()
 
 
 
+
+
+
 // xorshift RNG.
 //
 struct rng_xorshift32_t
@@ -10535,6 +10585,9 @@ Zeta( rng_mt_t& rng, f64* dst, u32 n )
 
 
 
+
+
+
 #define __OnMainKill( name ) \
   void ( name )( void* user )
 
@@ -10739,6 +10792,8 @@ MainKill()
 #define OPENGL_INSTEAD_OF_SOFTWARE       0
 #define GLW_RAWINPUT_KEYBOARD            0
 #define GLW_RAWINPUT_KEYBOARD_NOHOTKEY   1
+
+
 
 // COMPILE-TIME OPTIONS
 
@@ -13118,6 +13173,11 @@ GlwMainLoop( glwclient_t& client )
 
 
 
+#define USE_FILEMAPPED_OPEN 0 // TODO: unfinished
+#define USE_SIMPLE_SCROLLING 0 // TODO: questionable decision to try to simplify scrolling datastructs, getting rid of smooth scrolling.
+
+
+
 
 constant idx_t c_propsize = 24;
 
@@ -13802,6 +13862,9 @@ GetProp( u8* name )
 
 #define GetPropFromDb( T, name ) \
   *Cast( T*, GetProp( Str( #name ) ) )
+
+
+
 
 
 
@@ -14752,6 +14815,10 @@ FontSumAdvances(
 }
 
 
+
+
+
+
 #if OPENGL_INSTEAD_OF_SOFTWARE
 
   struct
@@ -15344,6 +15411,10 @@ GetZ(
 
 
 
+
+
+
+
 // this is the equivalent of an idx_t offset for a contiguous array.
 // the complexity is here to support arbitrary-sized paging, which we rely on for quick insert/delete.
 //
@@ -15793,12 +15864,12 @@ BufLoad( buf_t& buf, file_t& file )
   ProfFunc();
   AssertCrash( file.size < MAX_idx );
 
-  Init( buf.plist, MAX( 256, Cast( idx_t, file.size ) ) );
+  constant u64 c_chunk_size = 200*1024*1024 - 256; // leave a little space for plistheader_t
+  Init( buf.plist, CLAMP( Cast( idx_t, file.size ), 256, c_chunk_size ) );
 
   Alloc( buf.diffs, 256 );
 
   if( file.size ) {
-    constant u64 c_chunk_size = 2*1024*1024 - 256; // leave a little space for plistheader_t
     u64 nchunks = file.size / c_chunk_size;
     u64 nremain = file.size % c_chunk_size;
 
@@ -15820,17 +15891,25 @@ BufLoad( buf_t& buf, file_t& file )
   buf.history_idx = 0;
 }
 
+#if USE_FILEMAPPED_OPEN
+  void
+  BufLoad( buf_t& buf, filemapped_t& file )
+  {
+    ProfFunc();
+
+  }
+#endif
 
 void
 BufSave( buf_t& buf, file_t& file )
 {
   ProfFunc();
 
-  // PERF: we shouldn't bother chunking file writes that are already appropriately sized.
+  // PERF: we shouldn't bother copying chunks that are already appropriately sized.
   // i.e. if a diff is already a reasonable medium size, we shouldn't copy it for chunking.
-  constant idx_t c_chunk_size = 2*1024*1024;
+  constant idx_t c_chunk_size = 200*1024*1024;
   string_t chunk;
-  Alloc( chunk, c_chunk_size );
+  Alloc( chunk, MIN( buf.content_len, c_chunk_size ) );
 
   idx_t contentlen = buf.content_len;
   idx_t nchunks = contentlen / c_chunk_size;
@@ -15967,6 +16046,9 @@ FindFirstR(
   // XXXXXXXXXXXXXXXXXXXXXX
   // try finding the firstchar/firstchar match quickly first, and then iterate on failure.
   // hopefully we can cut down loopiter overhead to the bare minimum.
+  //
+  // we should definitely split to different routines for case_sensitive, word_boundary options.
+  // the toolchain isn't smart enough to pull those up out of the loops, so we're wasting time.
 
   *found = 0;
 
@@ -16346,7 +16428,7 @@ FindFirstL(
   auto match_end = start;
   auto before_match_end = x;
 
-  diff_t* diff;
+  diff_t* diff; // TODO: buggy to maintain this, as well as x. should probably just recompute as needed.
   if( x.offset_into_diff ) {
     x.offset_into_diff -= 1;
     diff = buf.diffs.mem + x.diff_idx;
@@ -16378,6 +16460,7 @@ FindFirstL(
       } else {
         if( nmatched ) {
           x = before_match_end;
+          diff = buf.diffs.mem + x.diff_idx;
           nmatched = 0;
         }
       }
@@ -16393,6 +16476,7 @@ FindFirstL(
             u8 c = diff_before_x->slice.mem[ before_x.offset_into_diff ];
             if( InWord( c ) ) {
               x = before_match_end;
+              diff = buf.diffs.mem + x.diff_idx;
               nmatched = 0;
               continue;
             }
@@ -16405,6 +16489,7 @@ FindFirstL(
             u8 c = diff_match_end->slice.mem[ match_end.offset_into_diff ];
             if( InWord( c ) ) {
               x = before_match_end;
+              diff = buf.diffs.mem + x.diff_idx;
               nmatched = 0;
               continue;
             }
@@ -18570,11 +18655,14 @@ AllocContents( buf_t& buf )
 
 
 
+
+
+
 struct
 scrollpos_t
 {
   content_ptr_t y; // pos at line start.
-  f64 frac; // fractional line offset, in units of lines.
+  f64 frac; // fractional line offset, in units of lines. TODO: consider kahan64_t, since we do lots of accumulation
 };
 
 
@@ -18661,6 +18749,14 @@ txt_dblclick_t
   u64 first_clock;
 };
 
+struct
+linerect_t
+{
+  vec2<f32> p0;
+  vec2<f32> p1;
+  content_ptr_t line_start;
+};
+
 
 struct
 txt_t
@@ -18675,7 +18771,7 @@ txt_t
   scrollpos_t scroll_start; // this is the line-start of the FIRST line of the CURRENT scroll view.
   scrollpos_t scroll_target; // this is the line-start of the CENTER line of the TARGET scroll view.
   content_ptr_t scroll_end; // this is the line-start of the LAST line of the CURRENT scroll view.
-  f64 scroll_vel;
+  kahan64_t scroll_vel;
   f32 scroll_x;
   u16 window_n_lines;
   array_t<cs_undo_t> undos_txtcs; // used in CmdTxtUndo/Redo. stores cursel state prior to each change.
@@ -18684,6 +18780,7 @@ txt_t
   array_t<cs_undo_absolute_t> redos; // we get away with not updating these as concurrents, since they're absolute indices.
   txt_dblclick_t dblclick;
   fontlayout_t layout; // created on every EditRender call. sent to Glw for rendering. used by EditControlMouse for screen -> cursel mapping.
+  array_t<linerect_t> linerects; // generated by rendering, used by mouse code to map to a line position.
   bool insert_spaces_for_tabs;
   u8 spaces_per_tab;
 };
@@ -18729,7 +18826,7 @@ Init( txt_t& txt )
   txt.scroll_start = {};
   txt.scroll_target = {};
   txt.scroll_end = {};
-  txt.scroll_vel = 0;
+  txt.scroll_vel = {};
   txt.scroll_x = 0;
   txt.window_n_lines = 0;
   Alloc( txt.undos_txtcs, 16 );
@@ -18740,6 +18837,7 @@ Init( txt_t& txt )
   txt.dblclick.first_cursor = 0;
   txt.dblclick.first_clock = 0;
   FontInit( txt.layout );
+  Alloc( txt.linerects, 16 );
 }
 
 void
@@ -18756,6 +18854,7 @@ Kill( txt_t& txt )
   txt.dblclick.first_cursor = 0;
   txt.dblclick.first_clock = 0;
   FontKill( txt.layout );
+  Free( txt.linerects );
 }
 
 
@@ -19038,13 +19137,27 @@ __TxtCmd( CmdScrollU )
 Inl void
 MakeCursorVisible( txt_t& txt )
 {
+  auto make_cursor_visible_radius = GetPropFromDb( f32, f32_make_cursor_visible_radius );
+
   auto c_ln_start = CursorStopAtNewlineL( txt.buf, txt.c, 0 );
 
-#if 0
-  // always center on the cursor:
-  txt.scroll_target.y = c_ln_start;
-  txt.scroll_target.frac = 0;
+#if USE_SIMPLE_SCROLLING
+  auto top = txt.scroll_start.y;
+  auto bot = CursorLineD( txt.buf, top, 0, MAX( txt.window_n_lines, 1 ) - 1, 0, 0 );
+  if( Less( c_ln_start, top ) ) {
+    txt.scroll_start.y = c_ln_start;
+    txt.scroll_start.frac = 0;
+  } elif( LEqual( bot, c_ln_start ) ) {
+    auto delta = CountLinesBetween( txt.buf, bot, c_ln_start );
+    txt.scroll_start.y = CursorLineD( txt.buf, txt.scroll_start.y, 0, delta + 1, 0, 0 );
+    txt.scroll_start.frac = 0;
+  } else {
+    // no scrolling action, c already on screen.
+  }
 #else
+  // always center on the cursor:
+//  txt.scroll_target.y = c_ln_start;
+//  txt.scroll_target.frac = 0;
 
   // We may have deleted from scroll_start to EOF, so we need to reset scroll_start so it's in-bounds.
   auto eof = GetEOF( txt.buf );
@@ -19059,7 +19172,7 @@ MakeCursorVisible( txt_t& txt )
   auto nlines = Cast( idx_t, txt.scroll_start.frac + 0.5 * txt.window_n_lines );
   auto scroll_half = CursorLineD( txt.buf, txt.scroll_start.y, 0, nlines, 0, 0 );
 
-  idx_t half_scrollwin = Cast( idx_t, 0.225f * txt.window_n_lines );
+  idx_t half_scrollwin = Cast( idx_t, make_cursor_visible_radius * txt.window_n_lines );
   auto yl = CursorLineU( txt.buf, scroll_half, 0, half_scrollwin, 0, 0 );
   auto yr = CursorLineD( txt.buf, scroll_half, 0, half_scrollwin, 0, 0 );
 
@@ -22291,201 +22404,7 @@ __TxtCmd( CmdRemTrailspace )
 //}
 
 
-Inl void
-TxtUpdateScrolling(
-  txt_t& txt,
-  font_t& font,
-  vec2<f32> origin,
-  vec2<f32> dim,
-  f64 timestep_realtime,
-  f64 timestep_fixed
-  )
-{
-  ProfFunc();
-
-  auto spaces_per_tab = GetPropFromDb( u8, u8_spaces_per_tab );
-
-  auto line_h = FontLineH( font );
-  auto timestep = MIN( timestep_realtime, timestep_fixed );
-
-  txt.window_n_lines = Cast( u16, dim.y / line_h );
-
-  auto bof = GetBOF( txt.buf );
-  auto eof = GetEOF( txt.buf );
-  AssertCrash( LEqual( txt.scroll_start.y, eof ) );
-
-  Prof( TxtUpdateScrollingVertical );
-
-  // ensure these are on line starts.
-  txt.scroll_start.y = CursorStopAtNewlineL( txt.buf, txt.scroll_start.y, 0 );
-  txt.scroll_target.y = CursorStopAtNewlineL( txt.buf, txt.scroll_target.y, 0 );
-
-  // =================================================================================
-  //
-  // SCROLLING
-  {
-    // reduce fractional position to integer position.
-    s32 target_dlines = Cast( s32, txt.scroll_target.frac );
-    txt.scroll_target.frac -= target_dlines;
-    if( target_dlines < 0 ) {
-      txt.scroll_target.y = CursorLineU( txt.buf, txt.scroll_target.y, 0, -target_dlines, 0, 0 );
-    } elif( target_dlines > 0 ) {
-      txt.scroll_target.y = CursorLineD( txt.buf, txt.scroll_target.y, 0, target_dlines, 0, 0 );
-    }
-
-    scrollpos_t scroll_half = txt.scroll_start;
-    scroll_half.frac += 0.5 * txt.window_n_lines;
-
-    auto target_dist_yl = Min( txt.scroll_target.y, scroll_half.y );
-    auto target_dist_yr = Max( txt.scroll_target.y, scroll_half.y );
-    f64 target_dist_sign = Less( scroll_half.y, txt.scroll_target.y )  ?  1  :  -1;
-    auto target_dist_nlines = CountLinesBetween( txt.buf, target_dist_yl, target_dist_yr );
-    auto target_dist = target_dist_sign * Cast( f64, target_dist_nlines );
-    target_dist += txt.scroll_target.frac - scroll_half.frac;
-
-    // PERF: until we optimize line traversal, smooth scrolling large distances is too slow.
-    // eg 0.6612 sec spent in CmdCursorGotoline, and 1.088 sec spent in TxtUpdateScrollingVertical here.
-    // so, avoid the smooth scrolling by jumping straight to the destination.
-
-    if( 10.0 * txt.window_n_lines < ABS( target_dist ) ) {
-      txt.scroll_start.frac += target_dist;
-
-    } else {
-      constant f64 mass = 1.0;
-      constant f64 spring_k = 500.0;
-      static f64 friction_k = 2.2 * Sqrt64( mass * spring_k ); // 2 * Sqrt( m * k ) is critical damping, but we want a little overdamping.
-
-      f64 force_spring = spring_k * target_dist;
-      f64 force_fric = -friction_k * txt.scroll_vel;
-      f64 force = force_spring + force_fric;
-
-      // TODO: solve ODE and use explicit soln.
-
-      f64 accel = force / mass;
-      f64 delta_vel = timestep * accel;
-      txt.scroll_vel += delta_vel;
-
-      // snap to 0 for small velocities to minimize pixel jitter.
-      if( ABS( txt.scroll_vel ) <= 2.0f ) {
-        txt.scroll_vel = 0;
-      }
-
-      f64 delta_pos = timestep * txt.scroll_vel;
-      txt.scroll_start.frac += delta_pos;
-    }
-
-    auto eof_ln_start = CursorStopAtNewlineL( txt.buf, eof, 0 );
-    bool at_bof = Equal( txt.scroll_start.y, bof );
-    bool at_eof = Equal( txt.scroll_start.y, eof_ln_start );
-    if( at_bof ) {
-      txt.scroll_start.frac = MAX( txt.scroll_start.frac, -0.5 * txt.window_n_lines );
-    }
-    if( at_eof ) {
-      txt.scroll_start.frac = MIN( txt.scroll_start.frac, 0.5 * txt.window_n_lines );
-    }
-
-    s32 to_scroll = Cast( s32, txt.scroll_start.frac );
-    bool multi_line = !at_bof  ||  !at_eof;
-    bool allow_bof_reduce = at_bof  &&  to_scroll > 0;
-    bool allow_eof_reduce = at_eof  &&  to_scroll < 0;
-    bool allow_mid_reduce = !at_bof  &&  !at_eof;
-    bool allow_reduce = multi_line  &&  ( allow_bof_reduce | allow_eof_reduce | allow_mid_reduce );
-    if( allow_reduce ) {
-      // reduce fractional position to integer position.
-      txt.scroll_start.frac -= to_scroll; // take only fractional part.
-
-      if( to_scroll < 0 ) {
-        txt.scroll_start.y = CursorLineU( txt.buf, txt.scroll_start.y, 0, -to_scroll, 0, 0 );
-      } elif( to_scroll > 0 ) {
-        txt.scroll_start.y = CursorLineD( txt.buf, txt.scroll_start.y, 0, to_scroll, 0, 0 );
-      }
-    }
-#if 0
-    // don't let scrolling go past first line or last line, fractionally.
-    bool scroll_on_bof = ( !txt.scroll_start.y );
-    bool scroll_on_eof = ( txt.scroll_start.y == eof_ln_start );
-    if( scroll_on_bof ) {
-      txt.scroll_start.frac = MAX( txt.scroll_start.frac, 0 );
-      if( txt.scroll_vel < 0 ) {
-        txt.scroll_vel = 0;
-      }
-    }
-    if( scroll_on_eof ) {
-      txt.scroll_start.frac = MIN( txt.scroll_start.frac, 0 );
-      if( txt.scroll_vel > 0 ) {
-        txt.scroll_vel = 0;
-      }
-    }
-#endif
-  }
-
-  auto scroll_end = CursorLineD( txt.buf, txt.scroll_start.y, 0, txt.window_n_lines + 1, 0, 0 );
-  txt.scroll_end = CursorStopAtNewlineR( txt.buf, scroll_end, 0 );
-
-  ProfClose( TxtUpdateScrollingVertical );
-
-  // horizontal scrolling
-
-  Prof( TxtUpdateScrollingHorizontal );
-
-  auto ln_start = CursorStopAtNewlineL( txt.buf, txt.c, 0 );
-  auto temp = AllocContents( txt.buf, ln_start, txt.c );
-  auto offset = LayoutString( font, spaces_per_tab, ML( temp ) );
-
-  if( offset > txt.scroll_x + 0.8f * dim.x ) {
-    txt.scroll_x = offset - 0.8f * dim.x;
-  } elif( offset < txt.scroll_x + 0.2f * dim.x ) {
-    txt.scroll_x = MAX( 0, offset - 0.2f * dim.x );
-  }
-  Free( temp );
-
-  ProfClose( TxtUpdateScrollingHorizontal );
-}
-
-
-constant idx_t c_max_line_len = 40; // sanity bounds.
-
-void
-TxtLayout(
-  txt_t& txt,
-  font_t& font
-  )
-{
-  ProfFunc();
-
-  auto spaces_per_tab = GetPropFromDb( u8, u8_spaces_per_tab );
-
-  FontClear( txt.layout );
-
-  auto line_start = txt.scroll_start.y;
-  line_start = CursorLineU( txt.buf, line_start, 0, 1, 0, 0 );
-
-  u8 line[c_max_line_len];
-
-  Forever {
-    idx_t line_len;
-    auto line_end = CursorStopAtNewlineR( txt.buf, line_start, &line_len );
-    line_len = MIN( c_max_line_len, line_len ); // account for hard end-clipping
-    Contents( txt.buf, line_start, line, line_len );
-
-    if( line_len ) {
-      // add the line text to the layout_t.
-      FontAddLayoutLine(
-        font,
-        txt.layout,
-        line,
-        line_len,
-        spaces_per_tab
-        );
-    }
-
-    auto line_start_next = CursorSingleNewlineR( txt.buf, line_end, 0 );
-    if( Equal( line_end, line_start_next ) | Greater( line_start_next, txt.scroll_end ) ) {
-      break;
-    }
-    line_start = line_start_next;
-  }
-}
+constant idx_t c_max_line_len = 500; // sanity bounds.
 
 void
 TxtLayoutSingleLineSubset(
@@ -22845,19 +22764,13 @@ EstimateLinearPos( txt_t& txt, content_ptr_t pos )
 }
 
 Inl vec3<f32>
-GetScrollPos( txt_t& txt )
+GetScrollPos( txt_t& txt ) // TODO: only need vec2 retval
 {
   return _vec3<f32>(
     CLAMP( EstimateLinearPos( txt, txt.scroll_start.y ), 0, 1 ),
     CLAMP( EstimateLinearPos( txt, txt.c ), 0, 1 ),
     CLAMP( EstimateLinearPos( txt, txt.scroll_end ), 0, 1 )
     );
-}
-
-Inl f32
-GetScrollTarget( txt_t& txt )
-{
-  return CLAMP( EstimateLinearPos( txt, txt.scroll_target.y ), 0, 1 );
 }
 
 Inl bool
@@ -22900,17 +22813,74 @@ Inl void
 GetScrollBtnPos(
   vec2<f32>& p0,
   vec2<f32>& p1,
-  vec3<f32> t,
+  f32 t_start,
+  f32 t_end,
   vec2<f32> origin,
   vec2<f32> dim,
   f32 px_scroll
   )
 {
   auto track_len = dim.y - 3 * px_scroll;
-  p0 = origin + _vec2( dim.x - px_scroll, px_scroll + track_len * t.x ) + _vec2( 1.0f );
-  p1 = origin + _vec2( dim.x, 2 * px_scroll + track_len * t.z ) - _vec2( 1.0f );
+  p0 = origin + _vec2( dim.x - px_scroll, px_scroll + track_len * t_start ) + _vec2( 1.0f );
+  p1 = origin + _vec2( dim.x, 2 * px_scroll + track_len * t_end ) - _vec2( 1.0f );
 }
 
+Inl void
+ScrollbarRender(
+  array_t<f32>& stream,
+  vec2<f32> origin,
+  vec2<f32> dim,
+  f32 t_start,
+  f32 t_end,
+  f32 z_bkgd,
+  f32 z_btn,
+  f32 px_scroll,
+  vec4<f32> rgba_scroll_bkgd,
+  vec4<f32> rgba_scroll_btn
+  )
+{
+  RenderQuad(
+    stream,
+    rgba_scroll_bkgd,
+    origin + _vec2( dim.x - px_scroll, 0.0f ),
+    origin + dim,
+    origin, dim,
+    z_bkgd
+    );
+
+  vec2<f32> btn_up0, btn_up1;
+  GetScrollBtnUp( btn_up0, btn_up1, origin, dim, px_scroll );
+  RenderQuad(
+    stream,
+    rgba_scroll_btn,
+    btn_up0,
+    btn_up1,
+    origin, dim,
+    z_btn
+    );
+
+  vec2<f32> btn_dn0, btn_dn1;
+  GetScrollBtnDn( btn_dn0, btn_dn1, origin, dim, px_scroll );
+  RenderQuad(
+    stream,
+    rgba_scroll_btn,
+    btn_dn0,
+    btn_dn1,
+    origin, dim,
+    z_btn
+    );
+
+  vec2<f32> btn_pos0, btn_pos1;
+  GetScrollBtnPos( btn_pos0, btn_pos1, t_start, t_end, origin, dim, px_scroll );
+  RenderQuad(
+    stream,
+    rgba_scroll_btn,
+    btn_pos0,
+    btn_pos1,
+    origin, dim,
+    z_btn
+    );
+}
 
 
 void
@@ -22922,6 +22892,8 @@ TxtRender(
   vec2<f32> origin,
   vec2<f32> dim,
   vec2<f32> zrange,
+  f64 timestep_realtime,
+  f64 timestep_fixed,
   bool draw_cursor,
   bool draw_cursorline,
   bool draw_cursorwordmatch,
@@ -22930,70 +22902,239 @@ TxtRender(
 {
   ProfFunc();
 
-  // invalidate cached target, since we know animation will require a re-render.
-  if( ABS( txt.scroll_vel ) > 1e-2f ) {
-    target_valid = 0;
-  }
+  auto spaces_per_tab = GetPropFromDb( u8, u8_spaces_per_tab );
+
+  auto line_h = FontLineH( font );
+  auto timestep = MIN( timestep_realtime, timestep_fixed );
 
   auto rgba_text = GetPropFromDb( vec4<f32>, rgba_text );
   auto rgba_wordmatch_text = GetPropFromDb( vec4<f32>, rgba_wordmatch_text );
   auto rgba_wordmatch_bkgd = GetPropFromDb( vec4<f32>, rgba_wordmatch_bkgd );
+  auto rgba_scroll_btn = GetPropFromDb( vec4<f32>, rgba_scroll_btn );
+
+  auto scroll_animated = GetPropFromDb( bool, bool_scroll_animated );
 
   auto scroll_pct = GetPropFromDb( f32, f32_scroll_pct );
   auto px_scroll = MAX( 16.0f, Round32( scroll_pct * MIN( dim.x, dim.y ) ) );
 
-  auto line_h = FontLineH( font );
   auto px_space_advance = FontGetAdvance( font, ' ' );
+
+  // figure out how many lines we can render, using the same spacing we will for real later.
+  txt.window_n_lines = 0;
+  kahan32_t size = {};
+  while( size.sum < dim.y ) { // PERF: integer space Ceil32 and a multiply should be sufficient, I just don't want to bother with precision issues right now.
+    Add( size, line_h );
+    size.sum = Ceil32( size.sum );
+    size.err = 0;
+    txt.window_n_lines += 1;
+  }
+
+  auto bof = GetBOF( txt.buf );
+  auto eof = GetEOF( txt.buf );
+  AssertCrash( LEqual( txt.scroll_start.y, eof ) );
+
+
+  // vertical scrolling
+  {
+#if USE_SIMPLE_SCROLLING
+    // we already determined scroll_start in MakeCursorVisible, and we're not doing animated
+    // scrolling for now, since it makes things feel laggy.
+    // so this is trivial; just compute scroll_end for scrollbar position rendering.
+    txt.scroll_end = CursorLineD( txt.buf, txt.scroll_start.y, 0, txt.window_n_lines, 0, 0 );
+#else
+
+    Prof( TxtUpdateScrollingVertical );
+
+    // ensure these are on line starts.
+    txt.scroll_start.y = CursorStopAtNewlineL( txt.buf, txt.scroll_start.y, 0 );
+    txt.scroll_target.y = CursorStopAtNewlineL( txt.buf, txt.scroll_target.y, 0 );
+
+    // reduce fractional position to integer position.
+    s32 target_dlines = Cast( s32, txt.scroll_target.frac );
+    txt.scroll_target.frac -= target_dlines;
+    if( target_dlines < 0 ) {
+      txt.scroll_target.y = CursorLineU( txt.buf, txt.scroll_target.y, 0, -target_dlines, 0, 0 );
+    } elif( target_dlines > 0 ) {
+      txt.scroll_target.y = CursorLineD( txt.buf, txt.scroll_target.y, 0, target_dlines, 0, 0 );
+    }
+
+    scrollpos_t scroll_half = txt.scroll_start;
+    scroll_half.frac += 0.5 * txt.window_n_lines;
+
+    auto target_dist_yl = Min( txt.scroll_target.y, scroll_half.y );
+    auto target_dist_yr = Max( txt.scroll_target.y, scroll_half.y );
+    f64 target_dist_sign = Less( scroll_half.y, txt.scroll_target.y )  ?  1  :  -1;
+    auto target_dist_nlines = CountLinesBetween( txt.buf, target_dist_yl, target_dist_yr );
+    auto target_dist = target_dist_sign * Cast( f64, target_dist_nlines );
+    target_dist += txt.scroll_target.frac - scroll_half.frac;
+
+    // PERF: until we optimize line traversal, smooth scrolling large distances is too slow.
+    // eg 0.6612 sec spent in CmdCursorGotoline, and 1.088 sec spent in TxtUpdateScrollingVertical here.
+    // so, avoid the smooth scrolling by jumping straight to the destination.
+
+    auto instantaneous =
+      !scroll_animated  ||
+      10.0 * txt.window_n_lines < ABS( target_dist );
+
+    if( instantaneous ) {
+      txt.scroll_start.frac += target_dist;
+
+    } else {
+      constant f64 mass = 1.0;
+      constant f64 spring_k = 1000.0;
+      static f64 friction_k = 2.2 * Sqrt64( mass * spring_k ); // 2 * Sqrt( m * k ) is critical damping, but we want a little overdamping.
+
+      f64 force_spring = spring_k * target_dist;
+      f64 force_fric = -friction_k * txt.scroll_vel.sum;
+      f64 force = force_spring + force_fric;
+
+      // TODO: solve ODE and use explicit soln.
+
+      f64 accel = force / mass;
+      f64 delta_vel = timestep * accel;
+      Add( txt.scroll_vel, delta_vel );
+
+      // snap to 0 for small velocities to minimize pixel jitter.
+      if( ABS( txt.scroll_vel.sum ) <= 2.0f ) {
+        txt.scroll_vel = {};
+      }
+
+      f64 delta_pos = timestep * txt.scroll_vel.sum;
+      txt.scroll_start.frac += delta_pos;
+
+      // invalidate cached target, since we know animation will require a re-render.
+      if( ABS( txt.scroll_vel.sum ) > 1e-2f ) {
+        target_valid = 0;
+      }
+    }
+
+    auto eof_ln_start = CursorStopAtNewlineL( txt.buf, eof, 0 );
+    bool at_bof = Equal( txt.scroll_start.y, bof );
+    bool at_eof = Equal( txt.scroll_start.y, eof_ln_start );
+    if( at_bof ) {
+      txt.scroll_start.frac = MAX( txt.scroll_start.frac, -0.5 * txt.window_n_lines );
+    }
+    if( at_eof ) {
+      txt.scroll_start.frac = MIN( txt.scroll_start.frac, 0.5 * txt.window_n_lines );
+    }
+
+    s32 to_scroll = Cast( s32, txt.scroll_start.frac );
+    bool multi_line = !at_bof  ||  !at_eof;
+    bool allow_bof_reduce = at_bof  &&  to_scroll > 0;
+    bool allow_eof_reduce = at_eof  &&  to_scroll < 0;
+    bool allow_mid_reduce = !at_bof  &&  !at_eof;
+    bool allow_reduce = multi_line  &&  ( allow_bof_reduce | allow_eof_reduce | allow_mid_reduce );
+    if( allow_reduce ) {
+      // reduce fractional position to integer position.
+      txt.scroll_start.frac -= to_scroll; // take only fractional part.
+
+      if( to_scroll < 0 ) {
+        txt.scroll_start.y = CursorLineU( txt.buf, txt.scroll_start.y, 0, -to_scroll, 0, 0 );
+      } elif( to_scroll > 0 ) {
+        txt.scroll_start.y = CursorLineD( txt.buf, txt.scroll_start.y, 0, to_scroll, 0, 0 );
+      }
+    }
+#if 0
+    // don't let scrolling go past first line or last line, fractionally.
+    bool scroll_on_bof = ( !txt.scroll_start.y );
+    bool scroll_on_eof = ( txt.scroll_start.y == eof_ln_start );
+    if( scroll_on_bof ) {
+      txt.scroll_start.frac = MAX( txt.scroll_start.frac, 0 );
+      if( txt.scroll_vel < 0 ) {
+        txt.scroll_vel = 0;
+      }
+    }
+    if( scroll_on_eof ) {
+      txt.scroll_start.frac = MIN( txt.scroll_start.frac, 0 );
+      if( txt.scroll_vel > 0 ) {
+        txt.scroll_vel = 0;
+      }
+    }
+#endif
+
+    auto scroll_end = CursorLineD( txt.buf, txt.scroll_start.y, 0, txt.window_n_lines + 1, 0, 0 );
+    txt.scroll_end = CursorStopAtNewlineR( txt.buf, scroll_end, 0 );
+
+    ProfClose( TxtUpdateScrollingVertical );
+  }
+#endif
+
 
   // render the scrollbar.
   if( allow_scrollbar  &&  ScrollbarVisible( dim, px_scroll ) ) {
     auto t = GetScrollPos( txt );
 
-    auto rgba_scroll_btn = GetPropFromDb( vec4<f32>, rgba_scroll_btn );
-
-    RenderQuad(
+    ScrollbarRender(
       stream,
+      origin,
+      dim,
+      t.x,
+      t.z,
+      GetZ( zrange, txtlayer_t::scroll_bkgd ),
+      GetZ( zrange, txtlayer_t::scroll_btn ),
+      px_scroll,
       GetPropFromDb( vec4<f32>, rgba_scroll_bkgd ),
-      origin + _vec2( dim.x - px_scroll, 0.0f ),
-      origin + dim,
-      origin, dim,
-      GetZ( zrange, txtlayer_t::scroll_bkgd )
-      );
-
-    vec2<f32> btn_up0, btn_up1;
-    GetScrollBtnUp( btn_up0, btn_up1, origin, dim, px_scroll );
-    RenderQuad(
-      stream,
-      rgba_scroll_btn,
-      btn_up0,
-      btn_up1,
-      origin, dim,
-      GetZ( zrange, txtlayer_t::scroll_btn )
-      );
-
-    vec2<f32> btn_dn0, btn_dn1;
-    GetScrollBtnDn( btn_dn0, btn_dn1, origin, dim, px_scroll );
-    RenderQuad(
-      stream,
-      rgba_scroll_btn,
-      btn_dn0,
-      btn_dn1,
-      origin, dim,
-      GetZ( zrange, txtlayer_t::scroll_btn )
-      );
-
-    vec2<f32> btn_pos0, btn_pos1;
-    GetScrollBtnPos( btn_pos0, btn_pos1, t, origin, dim, px_scroll );
-    RenderQuad(
-      stream,
-      rgba_scroll_btn,
-      btn_pos0,
-      btn_pos1,
-      origin, dim,
-      GetZ( zrange, txtlayer_t::scroll_btn )
+      rgba_scroll_btn
       );
 
     dim.x -= px_scroll;
+  }
+
+
+  // horizontal scrolling
+  {
+    Prof( TxtUpdateScrollingHorizontal );
+
+    auto ln_start = CursorStopAtNewlineL( txt.buf, txt.c, 0 );
+    auto temp = AllocContents( txt.buf, ln_start, txt.c );
+    auto offset = LayoutString( font, spaces_per_tab, ML( temp ) );
+
+    if( offset > txt.scroll_x + 0.8f * dim.x ) {
+      txt.scroll_x = offset - 0.8f * dim.x;
+    } elif( offset < txt.scroll_x + 0.2f * dim.x ) {
+      txt.scroll_x = MAX( 0, offset - 0.2f * dim.x );
+    }
+    Free( temp );
+
+    ProfClose( TxtUpdateScrollingHorizontal );
+  }
+
+
+  // font layout
+  {
+    Prof( TxtLayout );
+
+    FontClear( txt.layout );
+
+    auto line_start = txt.scroll_start.y;
+    line_start = CursorLineU( txt.buf, line_start, 0, 1, 0, 0 );
+
+    u8 line[c_max_line_len];
+
+    Forever {
+      idx_t line_len;
+      auto line_end = CursorStopAtNewlineR( txt.buf, line_start, &line_len );
+      line_len = MIN( c_max_line_len, line_len ); // account for hard end-clipping
+      Contents( txt.buf, line_start, line, line_len );
+
+      if( line_len ) {
+        // add the line text to the layout_t.
+        FontAddLayoutLine(
+          font,
+          txt.layout,
+          line,
+          line_len,
+          spaces_per_tab
+          );
+      }
+
+      auto line_start_next = CursorSingleNewlineR( txt.buf, line_end, 0 );
+      if( Equal( line_end, line_start_next ) | Greater( line_start_next, txt.scroll_end ) ) {
+        break;
+      }
+      line_start = line_start_next;
+    }
+    ProfClose( TxtLayout );
   }
 
   // draw bkgd
@@ -23009,6 +23150,9 @@ TxtRender(
   // =================================================================================
   //
   // OUTPUT
+
+  Reserve( txt.linerects, txt.window_n_lines + 1 );
+  txt.linerects.len = 0;
 
   auto word_l = CursorStopAtNonWordCharL( txt.buf, txt.c, 0 );
   auto word_r = CursorStopAtNonWordCharR( txt.buf, txt.c, 0 );
@@ -23055,6 +23199,15 @@ TxtRender(
           GetZ( zrange, txtlayer_t::cursorline )
           );
       }
+    }
+
+    // emit linerect for later mouse code.
+    {
+      // PERF: could save some cycles by comparing in origin-relative space.
+      auto linerect = AddBack( txt.linerects );
+      linerect->p0 = origin + _vec2<f32>( 0, y.sum );
+      linerect->p1 = origin + _vec2<f32>( dim.x, y.sum + line_h );
+      linerect->line_start = line_start;
     }
 
     // draw line text.
@@ -23132,9 +23285,12 @@ TxtRender(
           }
 
           auto char_offset = CountCharsBetween( txt.buf, line_start, span->l );
-          auto char_len = span_len;
 
-          // TODO: don't OOB char_offset/char_len in txt.layout, which has the c_max_line_len limit!
+          if( c_max_line_len <= char_offset ) {
+            break;
+          }
+
+          auto char_len = MIN( span_len, c_max_line_len - char_offset );
 
           auto advance_x = FontSumAdvances(
             txt.layout,
@@ -23250,14 +23406,6 @@ TxtRender(
 // TXT INPUTS -> OPERATIONS DISPATCH.
 //
 
-struct
-linerect_t
-{
-  vec2<f32> p0;
-  vec2<f32> p1;
-  content_ptr_t line_start;
-};
-
 Inl content_ptr_t
 MapMouseToCursor(
   txt_t& txt,
@@ -23268,62 +23416,12 @@ MapMouseToCursor(
   vec2<s8> px_click_correct
   )
 {
-  // TODO: rendering should build up the datastructures we need for mouse hit testing.
-  // i'm duplicating the relevant rendering code for now.
-  // i've already had to redo this in a major way once; it'll likely happen again.
-  // that'll also save some perf, since we don't have to do as much work on mouse move.
-
-  array_t<linerect_t> linerects;
-  Alloc( linerects, txt.window_n_lines + 2 ); // 1 extra on top and bot.
-
-  {
-    auto line_h = FontLineH( font );
-
-    f32 y0 = Cast( f32, -line_h * txt.scroll_start.frac );
-
-    kahan32_t x;
-    kahan32_t y = { y0 };
-
-    auto line_start = txt.scroll_start.y;
-    line_start = CursorLineU( txt.buf, line_start, 0, 1, 0, 0 );
-
-    // don't actually offset for the additional line above, if there is one.
-    if( !Equal( line_start, txt.scroll_start.y ) ) {
-      Sub( y, line_h );
-    }
-    y.sum = Ceil32( y.sum );
-    y.err = 0;
-
-    Forever {
-      auto line_end = CursorStopAtNewlineR( txt.buf, line_start, 0 );
-
-      x = { 0 - txt.scroll_x };
-
-      // PERF: could save some cycles by comparing in origin-relative space.
-      auto linerect = AddBack( linerects );
-      linerect->p0 = origin + _vec2<f32>( 0, y.sum );
-      linerect->p1 = origin + _vec2<f32>( dim.x, y.sum + line_h );
-      linerect->line_start = line_start;
-
-      // line advance.
-      Add( y, line_h );
-      y.sum = Ceil32( y.sum );
-      y.err = 0;
-
-      auto line_start_next = CursorSingleNewlineR( txt.buf, line_end, 0 );
-      if( Equal( line_end, line_start_next )  ||  Greater( line_start_next, txt.scroll_end ) ) {
-        break;
-      }
-      line_start = line_start_next;
-    }
-  }
-
   auto c = txt.scroll_start.y;
 
   // PERF: could save some cycles by comparing in origin-relative space.
   f32 min_distance = MAX_f32;
-  ForLen( i, linerects ) {
-    auto linerect = linerects.mem + i;
+  ForLen( i, txt.linerects ) {
+    auto linerect = txt.linerects.mem + i;
     auto mp = _vec2( Cast( f32, m.x ), Cast( f32, m.y ) );
     if( PtInBox( mp, linerect->p0, linerect->p1, 0.001f ) ) {
       c = linerect->line_start;
@@ -23336,19 +23434,10 @@ MapMouseToCursor(
     }
   }
 
-  Free( linerects );
-
   return c;
 
+// TODO: x dimension
 
-
-//  f64 y_frac = ( m.y - origin.y + px_click_correct.y + ( txt.scroll_start.frac * line_h ) ) / dim.y;
-//  y_frac = CLAMP( y_frac, 0, 1 );
-//  auto nlines_screen_max = Cast( idx_t, dim.y / line_h );
-//  auto cy = Cast( idx_t, y_frac * nlines_screen_max );
-//  AssertWarn( cy <= MAX_s16 );
-//  auto c = CursorLineD( txt.buf, txt.scroll_start.y, 0, cy, 0, 0 );
-//
 //#if 1
 //  idx_t cx = 0;
 //#else
@@ -23379,8 +23468,15 @@ SetScrollPosFraction(
 {
   auto p = Round_idx_from_f32( t * TxtLen( txt ) );
   auto pos = CursorCharR( txt.buf, GetBOF( txt.buf ), p, 0 );
+
+#if USE_SIMPLE_SCROLLING
+  auto center = CursorStopAtNewlineL( txt.buf, pos, 0 );
+  txt.scroll_start.y = CursorLineU( txt.buf, center, 0, txt.window_n_lines / 2, 0, 0 );
+  txt.scroll_start.frac = 0;
+#else
   txt.scroll_target.y = CursorStopAtNewlineL( txt.buf, pos, 0 );
   txt.scroll_target.frac = 0;
+#endif
 }
 
 void
@@ -23426,9 +23522,14 @@ TxtControlMouse(
     GetScrollBtnDn( btn_dn[0], btn_dn[1], origin, dim, px_scroll );
 
     vec2<f32> btn_pos[2];
-    GetScrollBtnPos( btn_pos[0], btn_pos[1], GetScrollPos( txt ), origin, dim, px_scroll );
+    auto scroll_pos = GetScrollPos( txt );
+    GetScrollBtnPos( btn_pos[0], btn_pos[1], scroll_pos.x, scroll_pos.z, origin, dim, px_scroll );
 
-    f32 t = GetScrollTarget( txt );
+#if USE_SIMPLE_SCROLLING
+    f32 t = CLAMP( EstimateLinearPos( txt, txt.scroll_start.y ), 0, 1 );
+#else
+    f32 t = CLAMP( EstimateLinearPos( txt, txt.scroll_target.y ), 0, 1 );
+#endif
 
     if( GlwMouseInsideRect( m, btn_up[0], btn_up[1] ) ) {
       switch( type ) {
@@ -23474,12 +23575,23 @@ TxtControlMouse(
     case glwmouseevent_t::wheelmove: {
       if( dwheel  &  ( !mod_isdn ) ) {
         dwheel *= scroll_sign;
+
+#if USE_SIMPLE_SCROLLING
+        dwheel *= scroll_nlines;
+        if( dwheel >= 0 ) {
+          txt.scroll_start.y = CursorLineD( txt.buf, txt.scroll_start.y, 0, Cast( idx_t, dwheel ), 0, 0 );
+        } else {
+          txt.scroll_start.y = CursorLineU( txt.buf, txt.scroll_start.y, 0, Cast( idx_t, -dwheel ), 0, 0 );
+        }
+#else
         if( scroll_continuous ) {
           txt.scroll_target.frac += scroll_continuous_sensitivity * dwheel;
         } else {
           dwheel *= scroll_nlines;
           txt.scroll_target.frac += dwheel;
         }
+#endif
+
         target_valid = 0;
       }
     } break;
@@ -24090,6 +24202,10 @@ TxtControlKeyboardSingleLine(
 
 
 
+
+
+
+
 struct
 cmd_t
 {
@@ -24386,18 +24502,6 @@ CmdRender(
   d_origin.y += px_padding / 2;
   d_dim.y = MAX( d_origin.y, d_dim.y - px_padding / 2 );
 
-  TxtUpdateScrolling(
-    cmd.txt_display,
-    font,
-    u_origin,
-    u_dim,
-    timestep_realtime,
-    timestep_fixed
-    );
-  TxtLayout(
-    cmd.txt_display,
-    font
-    );
   TxtRender(
     cmd.txt_display,
     target_valid,
@@ -24406,25 +24510,14 @@ CmdRender(
     u_origin,
     u_dim,
     zrange,
-
+    timestep_realtime,
+    timestep_fixed,
     1,
     1,
     0,
     1
     );
 
-  TxtUpdateScrolling(
-    cmd.txt_cmd,
-    font,
-    d_origin,
-    d_dim,
-    timestep_realtime,
-    timestep_fixed
-    );
-  TxtLayout(
-    cmd.txt_cmd,
-    font
-    );
   TxtRender(
     cmd.txt_cmd,
     target_valid,
@@ -24433,7 +24526,8 @@ CmdRender(
     d_origin,
     d_dim,
     zrange,
-
+    timestep_realtime,
+    timestep_fixed,
     1,
     1,
     1,
@@ -24564,6 +24658,7 @@ CmdControlKeyboard(
       );
   }
 }
+
 
 
 
@@ -25040,10 +25135,23 @@ struct
 edittxtopen_t
 {
   txt_t txt;
+#if USE_FILEMAPPED_OPEN
+  filemapped_t file_contents;
+#endif
   bool unsaved;
   bool horz_l; // else r.  // TODO: replace with an enum.
   u64 time_lastwrite;
 };
+
+#if USE_FILEMAPPED_OPEN
+  Inl void
+  Kill( edittxtopen_t& open )
+  {
+    FileFree( open.file_contents );
+    Kill( open.txt );
+  }
+#endif
+
 
 struct
 edit_t
@@ -25210,18 +25318,39 @@ EditOpen( edit_t& edit, file_t& file, edittxtopen_t** opened, bool* opened_exist
   *opened = open;
 }
 
-void
-EditOpenAndSetActiveTxt( edit_t& edit, file_t& file )
-{
-  edittxtopen_t* open = 0;
-  bool opened_existing = 0;
-  EditOpen( edit, file, &open, &opened_existing );
-  AssertCrash( open );
 
-  edit.horzfocus_l = open->horz_l;
-  edit.active[edit.horzfocus_l] = open;
-  MoveOpenedToFrontOfMru( edit, open );
-}
+#if USE_FILEMAPPED_OPEN
+
+  void
+  EditOpenAndSetActiveTxt( edit_t& edit, filemapped_t& file )
+  {
+    edittxtopen_t* open = 0;
+    bool opened_existing = 0;
+    EditOpen( edit, file, &open, &opened_existing );
+    AssertCrash( open );
+
+    edit.horzfocus_l = open->horz_l;
+    edit.active[edit.horzfocus_l] = open;
+    MoveOpenedToFrontOfMru( edit, open );
+  }
+
+#else
+
+  void
+  EditOpenAndSetActiveTxt( edit_t& edit, file_t& file )
+  {
+    edittxtopen_t* open = 0;
+    bool opened_existing = 0;
+    EditOpen( edit, file, &open, &opened_existing );
+    AssertCrash( open );
+
+    edit.horzfocus_l = open->horz_l;
+    edit.active[edit.horzfocus_l] = open;
+    MoveOpenedToFrontOfMru( edit, open );
+  }
+
+#endif
+
 
 
 
@@ -25671,12 +25800,18 @@ FileopenerOpenRow( edit_t& edit, fileopener_row_t* row )
   Memmove( AddBack( name, row->name.len ), ML( row->name ) );
 
   if( row->is_file ) {
+#if USE_FILEMAPPED_OPEN
+    auto file = FileOpenMappedExistingReadShareRead( ML( name ) );
+#else
     auto file = FileOpen( ML( name ), fileopen_t::only_existing, fileop_t::R, fileop_t::R );
+#endif
     if( file.loaded ) {
       EditOpenAndSetActiveTxt( edit, file );
       CmdMode_editfile_from_fileopener( edit );
     }
+#if !USE_FILEMAPPED_OPEN
     FileFree( file );
+#endif
 
   } else {
     bool up_dir = MemEqual( ML( row->name ), "..", 2 );
@@ -26482,7 +26617,11 @@ __EditCmd( CmdFindinfilesChoose )
   AssertCrash( edit.mode == editmode_t::findinfiles );
   auto& fif = edit.findinfiles;
   auto foundinfile = LookupElemByLinearIndex( fif.matches, fif.cursor );
+#if USE_FILEMAPPED_OPEN
+  auto file = FileOpenMappedExistingReadShareRead( ML( foundinfile->name ) );
+#else
   auto file = FileOpen( ML( foundinfile->name ), fileopen_t::only_existing, fileop_t::R, fileop_t::R );
+#endif
   if( file.loaded ) {
     EditOpenAndSetActiveTxt( edit, file );
     CmdMode_editfile_from_findinfiles( edit );
@@ -26497,7 +26636,9 @@ __EditCmd( CmdFindinfilesChoose )
     CmdSetSelection( open->txt, Cast( idx_t, &sel_l ), Cast( idx_t, &sel_r ) );
 #endif
   }
+#if !USE_FILEMAPPED_OPEN
   FileFree( file );
+#endif
 }
 
 __EditCmd( CmdFindinfilesFocusD )
@@ -26555,7 +26696,11 @@ ReplaceInFile( edit_t& edit, foundinfile_t* match, slice_t query, slice_t replac
 {
   auto open = EditGetOpenedFile( edit, ML( match->name ) );
   if( !open ) {
+#if USE_FILEMAPPED_OPEN
+    auto file = FileOpenMappedExistingReadShareRead( ML( foundinfile->name ) );
+#else
     auto file = FileOpen( ML( match->name ), fileopen_t::only_existing, fileop_t::R, fileop_t::R );
+#endif
     if( file.loaded ) {
       bool opened_existing = 0;
       EditOpen( edit, file, &open, &opened_existing );
@@ -26565,7 +26710,9 @@ ReplaceInFile( edit_t& edit, foundinfile_t* match, slice_t query, slice_t replac
       LogUI( "[EDIT] ReplaceInFile failed to load file: \"%s\"", cstr );
       MemHeapFree( cstr );
     }
+#if !USE_FILEMAPPED_OPEN
     FileFree( file );
+#endif
   }
   if( open ) {
 
@@ -26675,6 +26822,14 @@ Inl void
 Save( edit_t& edit, edittxtopen_t* open )
 {
   AssertCrash( open );
+#if USE_FILEMAPPED_OPEN
+  XXXXXXXXXXXXXX
+  We have to figure out how to save, given we have a R/R mapped file.
+  We could
+    save somewhere else, close the mapped file, rename/stomp, open mapped file.
+    copy file contents, close the mapped file, save via a regular W/R handle, open mapped file.
+  FileFree( open->file_contents
+#endif
   file_t file = FileOpen( ML( open->txt.filename ), fileopen_t::only_existing, fileop_t::W, fileop_t::R );
   if( file.loaded ) {
     if( open->time_lastwrite != file.time_lastwrite ) {
@@ -27014,12 +27169,18 @@ __EditCmd( CmdSwitchopenedChoose )
   AssertCrash( edit.mode == editmode_t::switchopened );
   auto obj = EditGetOpenedSelection( edit );
   if( obj ) {
-    auto file = FileOpen( obj->mem, obj->len, fileopen_t::only_existing, fileop_t::R, fileop_t::R );
+#if USE_FILEMAPPED_OPEN
+    auto file = FileOpenMappedExistingReadShareRead( ML( *obj ) );
+#else
+    auto file = FileOpen( ML( *obj ), fileopen_t::only_existing, fileop_t::R, fileop_t::R );
+#endif
     if( file.loaded ) {
       EditOpenAndSetActiveTxt( edit, file );
       CmdMode_editfile_from_switchopened( edit );
     }
+#if !USE_FILEMAPPED_OPEN
     FileFree( file );
+#endif
   }
 }
 
@@ -27194,6 +27355,8 @@ Enumc( editlayer_t )
   bkgd,
   sel,
   txt,
+  scroll_bkgd,
+  scroll_btn,
 
   COUNT
 };
@@ -27216,18 +27379,6 @@ _RenderTxt(
   bool allow_scrollbar
   )
 {
-  TxtUpdateScrolling(
-    txt,
-    font,
-    origin,
-    dim,
-    timestep_realtime,
-    timestep_fixed
-    );
-  TxtLayout(
-    txt,
-    font
-    );
   TxtRender(
     txt,
     target_valid,
@@ -27236,6 +27387,8 @@ _RenderTxt(
     origin,
     dim,
     zrange,
+    timestep_realtime,
+    timestep_fixed,
     draw_cursor,
     draw_cursorline,
     draw_cursorwordmatch,
@@ -27274,6 +27427,19 @@ _RenderStatusBar(
     spaces_per_tab,
     diff_count, diff_count_len
     );
+
+//  CsFromIntegerU( AL( diff_count ), &diff_count_len, open.txt.window_n_lines, 1 );
+//  DrawString(
+//    stream,
+//    font,
+//    origin + _vec2<f32>( 100, 0 ),
+//    GetZ( zrange, editlayer_t::txt ),
+//    origin,
+//    dim,
+//    rgba_text,
+//    spaces_per_tab,
+//    diff_count, diff_count_len
+//    );
 
   auto filename_w = LayoutString( font, spaces_per_tab, ML( open.txt.filename ) );
   DrawString(
@@ -27453,8 +27619,12 @@ FileopenerRender(
   auto rgba_cursor_size_text = GetPropFromDb( vec4<f32>, rgba_cursor_size_text );
   auto rgba_size_text = GetPropFromDb( vec4<f32>, rgba_size_text );
   auto rgba_cursor_text = GetPropFromDb( vec4<f32>, rgba_cursor_text );
+  auto rgba_scroll_btn = GetPropFromDb( vec4<f32>, rgba_scroll_btn );
   auto px_column_spacing = GetPropFromDb( f32, f32_px_column_spacing );
   auto spaces_per_tab = GetPropFromDb( u8, u8_spaces_per_tab );
+
+  auto scroll_pct = GetPropFromDb( f32, f32_scroll_pct );
+  auto px_scroll = MAX( 16.0f, Round32( scroll_pct * MIN( dim.x, dim.y ) ) );
 
   auto line_h = FontLineH( font );
 
@@ -27678,6 +27848,26 @@ FileopenerRender(
   AssertCrash( fo.scroll_start <= fo.matches.totallen );
   auto nlines_render = MIN( 1 + nlines_screen_floored, fo.matches.totallen - fo.scroll_start );
 
+  // render the scrollbar.
+  if( ScrollbarVisible( dim, px_scroll ) ) {
+    auto t_start = CLAMP( Cast( f32, fo.scroll_start ) / Cast( f32, fo.matches.totallen ), 0, 1 );
+    auto t_end   = CLAMP( Cast( f32, fo.scroll_end   ) / Cast( f32, fo.matches.totallen ), 0, 1 );
+    ScrollbarRender(
+      stream,
+      origin,
+      dim,
+      t_start,
+      t_end,
+      GetZ( zrange, editlayer_t::scroll_bkgd ),
+      GetZ( zrange, editlayer_t::scroll_btn ),
+      px_scroll,
+      GetPropFromDb( vec4<f32>, rgba_scroll_bkgd ),
+      rgba_scroll_btn
+      );
+
+    dim.x -= px_scroll;
+  }
+
   { // draw bkgd
     RenderQuad(
       stream,
@@ -27792,18 +27982,6 @@ FileopenerRender(
         if( edit.mode == editmode_t::fileopener_renaming  &&
             fo.renaming_row == fo.scroll_start + i )
         {
-          TxtUpdateScrolling(
-            fo.renaming_txt,
-            font,
-            elem_origin,
-            elem_dim,
-            timestep_realtime,
-            timestep_fixed
-            );
-          TxtLayout(
-            fo.renaming_txt,
-            font
-            );
           TxtRender(
             fo.renaming_txt,
             target_valid,
@@ -27812,6 +27990,8 @@ FileopenerRender(
             elem_origin,
             elem_dim,
             ZRange( zrange, editlayer_t::txt ),
+            timestep_realtime,
+            timestep_fixed,
             1,
             0,
             0,
@@ -27857,7 +28037,11 @@ EditRender(
   auto rgba_wordmatch_bkgd = GetPropFromDb( vec4<f32>, rgba_wordmatch_bkgd );
   auto rgba_size_text = GetPropFromDb( vec4<f32>, rgba_size_text );
   auto rgba_cursor_text = GetPropFromDb( vec4<f32>, rgba_cursor_text );
+  auto rgba_scroll_btn = GetPropFromDb( vec4<f32>, rgba_scroll_btn );
   auto spaces_per_tab = GetPropFromDb( u8, u8_spaces_per_tab );
+
+  auto scroll_pct = GetPropFromDb( f32, f32_scroll_pct );
+  auto px_scroll = MAX( 16.0f, Round32( scroll_pct * MIN( dim.x, dim.y ) ) );
 
   auto line_h = FontLineH( font );
 
@@ -28583,6 +28767,30 @@ EditRender(
         dim.y -= line_h;
       }
 
+      auto nlines_screen_floored = Cast( idx_t, dim.y / line_h );
+      fif.pageupdn_distance = MAX( 1, nlines_screen_floored / 2 );
+      fif.scroll_end = fif.scroll_start + MIN( nlines_screen_floored, fif.matches.totallen );
+
+      // render the scrollbar.
+      if( ScrollbarVisible( dim, px_scroll ) ) {
+        auto t_start = CLAMP( Cast( f32, fif.scroll_start ) / Cast( f32, fif.matches.totallen ), 0, 1 );
+        auto t_end   = CLAMP( Cast( f32, fif.scroll_end   ) / Cast( f32, fif.matches.totallen ), 0, 1 );
+        ScrollbarRender(
+          stream,
+          origin,
+          dim,
+          t_start,
+          t_end,
+          GetZ( zrange, editlayer_t::scroll_bkgd ),
+          GetZ( zrange, editlayer_t::scroll_btn ),
+          px_scroll,
+          GetPropFromDb( vec4<f32>, rgba_scroll_bkgd ),
+          rgba_scroll_btn
+          );
+
+        dim.x -= px_scroll;
+      }
+
       { // bkgd
         RenderQuad(
           stream,
@@ -28593,10 +28801,6 @@ EditRender(
           GetZ( zrange, editlayer_t::bkgd )
           );
       }
-
-      auto nlines_screen_floored = Cast( idx_t, dim.y / line_h );
-      fif.pageupdn_distance = MAX( 1, nlines_screen_floored / 2 );
-      fif.scroll_end = fif.scroll_start + MIN( nlines_screen_floored, fif.matches.totallen );
 
       if( fif.matches.totallen ) {
         fontlayout_t layout;
@@ -28714,25 +28918,39 @@ FileopenerMapMouseToCursor(
 {
   auto line_h = FontLineH( font );
 
-  //idx_t c;
+  f32 y_frac = ( m.y - origin.y + px_click_correct.y ) / dim.y;
+  idx_t nlines_screen_max = Cast( idx_t, dim.y / line_h );
+  idx_t cy = Cast( idx_t, y_frac * nlines_screen_max );
+
+  // TODO: same hit test rects as txt.
+
+  cy += fo.scroll_start;
+  cy = MAX( cy, 5 ) - 5; // -5 for the cwd, ignore lines, results count, etc.
+  idx_t r = MIN( cy, fo.matches.totallen - 1 );
+  return r;
+}
+
+Inl idx_t
+FindinfilesMapMouseToCursor(
+  findinfiles_t& fif,
+  vec2<f32> origin,
+  vec2<f32> dim,
+  vec2<s32> m,
+  font_t& font,
+  vec2<s8> px_click_correct
+  )
+{
+  auto line_h = FontLineH( font );
 
   f32 y_frac = ( m.y - origin.y + px_click_correct.y ) / dim.y;
   idx_t nlines_screen_max = Cast( idx_t, dim.y / line_h );
   idx_t cy = Cast( idx_t, y_frac * nlines_screen_max );
 
-  //f32 x_frac = ( m.x - origin.x + px_click_correct.x ) / Cast( f32, font.char_w );
-  //idx_t cx = Cast( idx_t, x_frac );
-  //idx_t line_end;
-  //CursorStopAtNewlineR( txt.buf, c, &line_end );
-  //c = MIN( c + cx, line_end );
-  //
-  //*pos = c;
+  // TODO: same hit test rects as txt.
 
-  cy += fo.scroll_start;
-  if( cy ) {
-    cy -= 1; // -1 for cwd display line.
-  }
-  idx_t r = MIN( cy, fo.matches.totallen - 1 );
+  cy += fif.scroll_start;
+  cy = MAX( cy, 7 ) - 7; // -7 for the cwd, ignore lines, results count, etc.
+  idx_t r = MIN( cy, fif.matches.totallen - 1 );
   return r;
 }
 
@@ -28754,6 +28972,8 @@ FileopenerControlMouse(
 {
   ProfFunc();
 
+  auto& fo = edit.fileopener;
+
   auto px_click_correct = _vec2<s8>(); // TODO: mouse control.
   auto scroll_nlines = GetPropFromDb( u8, u8_scroll_nlines );
   auto scroll_sign = GetPropFromDb( s8, s8_scroll_sign );
@@ -28766,7 +28986,7 @@ FileopenerControlMouse(
 
   if( !GlwMouseInside( m, origin, dim ) ) {
     // clear all interactivity state.
-    edit.fileopener.dblclick.first_made = 0;
+    fo.dblclick.first_made = 0;
     return;
   }
 
@@ -28790,20 +29010,20 @@ FileopenerControlMouse(
       switch( btn ) {
         case glwmousebtn_t::l: {
 
-          edit.fileopener.cursor = FileopenerMapMouseToCursor( edit.fileopener, origin, dim, m, font, px_click_correct );
-          bool same_cursor = ( edit.fileopener.cursor == edit.fileopener.dblclick.first_cursor );
-          bool double_click = ( edit.fileopener.dblclick.first_made & same_cursor );
+          fo.cursor = FileopenerMapMouseToCursor( fo, origin, dim, m, font, px_click_correct );
+          bool same_cursor = ( fo.cursor == fo.dblclick.first_cursor );
+          bool double_click = ( fo.dblclick.first_made & same_cursor );
           if( double_click ) {
-            if( TimeSecFromClocks64( TimeClock() - edit.fileopener.dblclick.first_clock ) <= dblclick_period_sec ) {
-              edit.fileopener.dblclick.first_made = 0;
+            if( TimeSecFromClocks64( TimeClock() - fo.dblclick.first_clock ) <= dblclick_period_sec ) {
+              fo.dblclick.first_made = 0;
               CmdFileopenerChoose( edit );
             } else {
-              edit.fileopener.dblclick.first_clock = TimeClock();
+              fo.dblclick.first_clock = TimeClock();
             }
           } else {
-            edit.fileopener.dblclick.first_made = 1;
-            edit.fileopener.dblclick.first_clock = TimeClock();
-            edit.fileopener.dblclick.first_cursor = edit.fileopener.cursor;
+            fo.dblclick.first_made = 1;
+            fo.dblclick.first_clock = TimeClock();
+            fo.dblclick.first_cursor = fo.cursor;
           }
           target_valid = 0;
         } break;
@@ -28823,6 +29043,76 @@ FileopenerControlMouse(
 
     case glwmouseevent_t::move: {
       //printf( "move ( %d, %d )\n", m.x, m.y );
+    } break;
+
+    default: UnreachableCrash();
+  }
+}
+
+void
+FindinfilesControlMouse(
+  edit_t& edit,
+  bool& target_valid,
+  font_t& font,
+  vec2<f32> origin,
+  vec2<f32> dim,
+  glwmouseevent_t type,
+  glwmousebtn_t btn,
+  bool* alreadydn,
+  bool* keyalreadydn,
+  vec2<s32> m,
+  vec2<s32> raw_delta,
+  s32 dwheel
+  )
+{
+  ProfFunc();
+
+  auto px_click_correct = _vec2<s8>(); // TODO: mouse control.
+  auto scroll_nlines = GetPropFromDb( u8, u8_scroll_nlines );
+  auto scroll_sign = GetPropFromDb( s8, s8_scroll_sign );
+
+  bool ctrl  = keyalreadydn[Cast( enum_t, glwkey_t::ctrl )];
+  bool shift = keyalreadydn[Cast( enum_t, glwkey_t::shift )];
+  bool alt   = keyalreadydn[Cast( enum_t, glwkey_t::alt )];
+  bool mod_isdn = ( ctrl | shift | alt );
+
+  switch( type ) {
+
+    case glwmouseevent_t::wheelmove: {
+      if( dwheel  &&  !mod_isdn ) {
+        dwheel *= scroll_sign;
+        dwheel *= scroll_nlines;
+        if( dwheel < 0 ) {
+          CmdFindinfilesScrollU( edit, Cast( idx_t, -dwheel ) );
+        } else {
+          CmdFindinfilesScrollD( edit, Cast( idx_t, dwheel ) );
+        }
+        target_valid = 0;
+      }
+    } break;
+
+    case glwmouseevent_t::dn: {
+
+      switch( btn ) {
+        case glwmousebtn_t::l: {
+          edit.findinfiles.cursor = FindinfilesMapMouseToCursor( edit.findinfiles, origin, dim, m, font, px_click_correct );
+          target_valid = 0;
+        } break;
+
+        case glwmousebtn_t::r:
+        case glwmousebtn_t::m:
+        case glwmousebtn_t::b4:
+        case glwmousebtn_t::b5: {
+        } break;
+
+        default: UnreachableCrash();
+      }
+    } break;
+
+    case glwmouseevent_t::up: {
+    } break;
+
+    case glwmouseevent_t::move: {
     } break;
 
     default: UnreachableCrash();
@@ -28907,6 +29197,23 @@ EditControlMouse(
 
     case editmode_t::fileopener: {
       FileopenerControlMouse(
+        edit,
+        target_valid,
+        font,
+        origin,
+        dim,
+        type,
+        btn,
+        alreadydn,
+        keyalreadydn,
+        m,
+        raw_delta,
+        dwheel
+        );
+    } break;
+
+    case editmode_t::findinfiles: {
+      FindinfilesControlMouse(
         edit,
         target_valid,
         font,
@@ -30634,7 +30941,11 @@ Main( array_t<slice_t>& args )
 
   if( args.len ) {
     auto arg = args.mem + 0;
-    auto file = FileOpen( arg->mem, arg->len, fileopen_t::only_existing, fileop_t::R, fileop_t::R );
+#if USE_FILEMAPPED_OPEN
+    auto file = FileOpenMappedExistingReadShareRead( ML( *arg ) );
+#else
+    auto file = FileOpen( ML( *arg ), fileopen_t::only_existing, fileop_t::R, fileop_t::R );
+#endif
     if( file.loaded ) {
       EditOpenAndSetActiveTxt( app->edit, file );
       CmdMode_editfile_from_fileopener( app->edit );
@@ -30649,7 +30960,9 @@ Main( array_t<slice_t>& args )
         );
       return -1;
     }
+#if !USE_FILEMAPPED_OPEN
     FileFree( file );
+#endif
   }
 
 
@@ -30841,6 +31154,8 @@ WinMain( HINSTANCE prog_inst, HINSTANCE prog_inst_prev, LPSTR prog_cmd_line, int
   add ln_start caching, so we can speed up gotoline, cursorcharu/d, scrolling, etc.
     LNCACHE
 
+  scrollpos_t
+    f64 frac; // fractional line offset, in units of lines. TODO: consider kahan64_t, since we do lots of accumulation
 
 
   prevent double-opening of a file, by normalizing to full filepath on "te src/main.cpp" usage.
@@ -30853,6 +31168,8 @@ WinMain( HINSTANCE prog_inst, HINSTANCE prog_inst_prev, LPSTR prog_cmd_line, int
   when we move a txtopen across horz, find the mru txtopen on the source side, so we don't have a txtopen dupe.
     maybe tag each mru entry with a 'left or right' flag, so we can do this.
     or, just pick the next mru, no matter which side it's on, and stick it on the source side.
+
+  real multi-views of a single file. right now we just draw the same thing twice.
 
   move clipboard handling to os interface.
 
@@ -31153,5 +31470,168 @@ WinMain( HINSTANCE prog_inst, HINSTANCE prog_inst_prev, LPSTR prog_cmd_line, int
   in txt_t, add advanced cursel movement logic for non-monospace
     think about cursel up/down; we'd want to choose a vertical line where the cursel is, and minimize the distance from that line, instead of just a c_inline scheme.
     this also applies to lines with tabs.
+
+#endif
+
+
+
+
+
+// TEMPORARY
+
+#if 0
+
+
+  // ensure these are on line starts.
+  txt.scroll_start.y = CursorStopAtNewlineL( txt.buf, txt.scroll_start.y, 0 );
+  txt.scroll_target.y = CursorStopAtNewlineL( txt.buf, txt.scroll_target.y, 0 );
+
+  // =================================================================================
+  //
+  // SCROLLING
+  {
+    // reduce fractional position to integer position.
+    s32 target_dlines = Cast( s32, txt.scroll_target.frac );
+    txt.scroll_target.frac -= target_dlines;
+    if( target_dlines < 0 ) {
+      txt.scroll_target.y = CursorLineU( txt.buf, txt.scroll_target.y, 0, -target_dlines, 0, 0 );
+    } elif( target_dlines > 0 ) {
+      txt.scroll_target.y = CursorLineD( txt.buf, txt.scroll_target.y, 0, target_dlines, 0, 0 );
+    }
+
+    scrollpos_t scroll_half = txt.scroll_start;
+    scroll_half.frac += 0.5 * txt.window_n_lines;
+
+    auto target_dist_yl = Min( txt.scroll_target.y, scroll_half.y );
+    auto target_dist_yr = Max( txt.scroll_target.y, scroll_half.y );
+    f64 target_dist_sign = Less( scroll_half.y, txt.scroll_target.y )  ?  1  :  -1;
+    auto target_dist_nlines = CountLinesBetween( txt.buf, target_dist_yl, target_dist_yr );
+    auto target_dist = target_dist_sign * Cast( f64, target_dist_nlines );
+    target_dist += txt.scroll_target.frac - scroll_half.frac;
+
+    // PERF: until we optimize line traversal, smooth scrolling large distances is too slow.
+    // eg 0.6612 sec spent in CmdCursorGotoline, and 1.088 sec spent in TxtUpdateScrollingVertical here.
+    // so, avoid the smooth scrolling by jumping straight to the destination.
+
+
+#if NO_SMOOTH_SCROLL
+    txt.scroll_start.frac += target_dist;
+#else
+    if( 10.0 * txt.window_n_lines < ABS( target_dist ) ) {
+      txt.scroll_start.frac += target_dist;
+
+    } else {
+      constant f64 mass = 1.0;
+      constant f64 spring_k = 1000.0;
+      static f64 friction_k = 2.2 * Sqrt64( mass * spring_k ); // 2 * Sqrt( m * k ) is critical damping, but we want a little overdamping.
+
+      f64 force_spring = spring_k * target_dist;
+      f64 force_fric = -friction_k * txt.scroll_vel;
+      f64 force = force_spring + force_fric;
+
+      // TODO: solve ODE and use explicit soln.
+
+      f64 accel = force / mass;
+      f64 delta_vel = timestep * accel;
+      txt.scroll_vel += delta_vel;
+
+      // snap to 0 for small velocities to minimize pixel jitter.
+      if( ABS( txt.scroll_vel ) <= 2.0f ) {
+        txt.scroll_vel = 0;
+      }
+
+      f64 delta_pos = timestep * txt.scroll_vel;
+      txt.scroll_start.frac += delta_pos;
+    }
+#endif
+
+    auto eof_ln_start = CursorStopAtNewlineL( txt.buf, eof, 0 );
+    bool at_bof = Equal( txt.scroll_start.y, bof );
+    bool at_eof = Equal( txt.scroll_start.y, eof_ln_start );
+    if( at_bof ) {
+      txt.scroll_start.frac = MAX( txt.scroll_start.frac, -0.5 * txt.window_n_lines );
+    }
+    if( at_eof ) {
+      txt.scroll_start.frac = MIN( txt.scroll_start.frac, 0.5 * txt.window_n_lines );
+    }
+
+    s32 to_scroll = Cast( s32, txt.scroll_start.frac );
+    bool multi_line = !at_bof  ||  !at_eof;
+    bool allow_bof_reduce = at_bof  &&  to_scroll > 0;
+    bool allow_eof_reduce = at_eof  &&  to_scroll < 0;
+    bool allow_mid_reduce = !at_bof  &&  !at_eof;
+    bool allow_reduce = multi_line  &&  ( allow_bof_reduce | allow_eof_reduce | allow_mid_reduce );
+    if( allow_reduce ) {
+      // reduce fractional position to integer position.
+      txt.scroll_start.frac -= to_scroll; // take only fractional part.
+
+      if( to_scroll < 0 ) {
+        txt.scroll_start.y = CursorLineU( txt.buf, txt.scroll_start.y, 0, -to_scroll, 0, 0 );
+      } elif( to_scroll > 0 ) {
+        txt.scroll_start.y = CursorLineD( txt.buf, txt.scroll_start.y, 0, to_scroll, 0, 0 );
+      }
+    }
+
+#if 0
+    // don't let scrolling go past first line or last line, fractionally.
+    bool scroll_on_bof = ( !txt.scroll_start.y );
+    bool scroll_on_eof = ( txt.scroll_start.y == eof_ln_start );
+    if( scroll_on_bof ) {
+      txt.scroll_start.frac = MAX( txt.scroll_start.frac, 0 );
+      if( txt.scroll_vel < 0 ) {
+        txt.scroll_vel = 0;
+      }
+    }
+    if( scroll_on_eof ) {
+      txt.scroll_start.frac = MIN( txt.scroll_start.frac, 0 );
+      if( txt.scroll_vel > 0 ) {
+        txt.scroll_vel = 0;
+      }
+    }
+#endif
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+//  // always center on the cursor:
+//  txt.scroll_target.y = c_ln_start;
+//  txt.scroll_target.frac = 0;
+
+  // We may have deleted from scroll_start to EOF, so we need to reset scroll_start so it's in-bounds.
+  auto eof = GetEOF( txt.buf );
+  if( Greater( txt.scroll_start.y, eof ) ) {
+    txt.scroll_start.y = CursorStopAtNewlineL( txt.buf, eof, 0 );
+    txt.scroll_start.frac = 0;
+  }
+
+  // We may have changed text around scroll_start, so we need to reset scroll_start to be BOL.
+  txt.scroll_start.y = CursorStopAtNewlineL( txt.buf, txt.scroll_start.y, 0 );
+
+  auto nlines = Cast( idx_t, txt.scroll_start.frac + 0.5 * txt.window_n_lines );
+  auto scroll_half = CursorLineD( txt.buf, txt.scroll_start.y, 0, nlines, 0, 0 );
+
+  idx_t half_scrollwin = Cast( idx_t, 0.225f * txt.window_n_lines );
+  auto yl = CursorLineU( txt.buf, scroll_half, 0, half_scrollwin, 0, 0 );
+  auto yr = CursorLineD( txt.buf, scroll_half, 0, half_scrollwin, 0, 0 );
+
+  if( Less( c_ln_start, yl ) ) {
+    idx_t delta_y = CountLinesBetween( txt.buf, c_ln_start, yl );
+    scroll_half = CursorLineU( txt.buf, scroll_half, 0, delta_y, 0, 0 );
+  } elif( Greater( c_ln_start, yr ) ) {
+    idx_t delta_y = CountLinesBetween( txt.buf, yr, c_ln_start );
+    scroll_half = CursorLineD( txt.buf, scroll_half, 0, delta_y, 0, 0 );
+  }
+  txt.scroll_target.y = scroll_half;
+  txt.scroll_target.frac = 0;
+
 
 #endif
