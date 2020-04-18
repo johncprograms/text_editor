@@ -41,7 +41,7 @@ There's also an instrumentation profiler, which dumps it's statistics to that lo
 
 I've excluded tests from this distribution, since the tests are a separate program, and they test more than just this text editing code. I haven't bothered slicing the test program up; so sorry, no tests for you.
 
-One final warning that this isn't general-audience ready. There's many more tests to write for stability reasons, fuzzing to do, etc. But the current trade-off of me fixing a bug every now and then, versus spending time on test writing, isn't a trade-off worth making at the moment. It's stable enough for me, so there you go.
+One final warning that this isn't general-audience ready. There's many more tests to write for stability reasons, fuzzing to do, etc. But the current trade-off of me fixing a bug every now and then, versus spending time on test writing, isn't a trade-off worth making at the moment. It's stable enough for me right now, so there you go.
 
 # programming curiosities
 * I use ```#define Inl   __forceinline static``` very generously. That's because lots of functions are there just for convenience / code deduplication, and don't map well to performant assembly. Linkers are terrible at inlining; I'd much rather have the problem of deciding which functions not to inline.
