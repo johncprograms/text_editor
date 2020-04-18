@@ -39,7 +39,9 @@ On crash, a full heap dump will get written to that logging directory alongside 
 
 There's also an instrumentation profiler, which dumps it's statistics to that log on program exit. See ```PROF_ENABLED``` for the switch to turn this on/off.
 
-I've excluded tests from this distribution, since the tests are a separate program, and they test more than just this text editing code. I haven't bothered slicing the test program up, since it executes all the tests pretty darn fast. Sorry, no tests for you.
+I've excluded tests from this distribution, since the tests are a separate program, and they test more than just this text editing code. I haven't bothered slicing the test program up; so sorry, no tests for you.
+
+One final warning that this isn't general-audience ready. There's many more tests to write for stability reasons, fuzzing to do, etc. But the current trade-off of me fixing a bug every now and then, versus spending time on test writing, isn't a trade-off worth making at the moment. It's stable enough for me, so there you go.
 
 # programming curiosities
 * I use ```#define Inl   __forceinline static``` very generously. That's because lots of functions are there just for convenience / code deduplication, and don't map well to performant assembly. Linkers are terrible at inlining; I'd much rather have the problem of deciding which functions not to inline.
