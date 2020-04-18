@@ -1,5 +1,5 @@
 # text_editor
-My personal text editor. It's a modal editor I wrote to avoid wrist problems, so it's not beginner-friendly. None of the keybinds make sense, except to me. So don't try to use it, but hey, you might find some interesting code in there.
+My personal text editor. It's a modal editor I wrote to avoid wrist problems, so it's not beginner-friendly. None of the keybinds make sense, except to me. So don't try to use it. But hey, you might find some interesting code in there.
 
 # credits
 * Sean Barrett for https://github.com/nothings/stb/blob/master/stb_truetype.h, which is included in the repo, or at least on old version of it.
