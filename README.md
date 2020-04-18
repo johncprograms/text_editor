@@ -5,8 +5,6 @@ My personal text editor. It's a modal editor I wrote to avoid wrist problems, so
 * Sean Barrett for https://github.com/nothings/stb/blob/master/stb_truetype.h, which is included in the repo, or at least on old version of it.
 * Myself, of course! :D
 
-meaningless edit
-
 # logistics
 It's Windows-only, AVX2-only. That's because all the machines I'm using meet that spec. 
 It mainly uses AVX2 to have reasonably fast software rendering ( ~10 milliseconds end-to-end frame time, on a 4k display; ~3 milliseconds of which is spent by Windows ).
